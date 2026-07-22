@@ -1,0 +1,34 @@
+# Dependencias
+node_modules/
+
+# Builds y salidas de render
+dist/
+out/
+*.mp4
+*.mov
+*.m4a
+*.wav
+*.jpg
+*.png
+!docs/**/*.png
+
+# Base de datos local
+*.sqlite
+*.sqlite3
+*.db
+
+# Secretos y configuración local
+.env
+.env.local
+*.pem
+
+# Material fuente y temporales
+media/
+tmp/
+.cache/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
