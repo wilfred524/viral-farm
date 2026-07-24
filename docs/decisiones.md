@@ -8,7 +8,10 @@
 | Formato inicial | Movie recaps (escenas + narración), pipeline agnóstico al nicho | 2026-07-22 |
 | Publicación | Servicio intermediario (una API → 4 redes) | 2026-07-22 |
 | Interfaz de control | Telegram + n8n | 2026-07-22 |
-| Stack | Node.js + TS, Remotion, ffmpeg, SQLite, Whisper local | 2026-07-22 |
+| Stack | Node.js + TS, Remotion, ffmpeg, Whisper local | 2026-07-22 |
+| Base de datos | **PostgreSQL** (ya instalado; reemplaza a SQLite — locking multi-contenedor) | 2026-07-24 |
+| Orquestación | **n8n = capa de control humano** (Telegram, aprobación, cron); el pipeline lo motorizan workers TS vía tabla `jobs` en Postgres (`FOR UPDATE SKIP LOCKED`). Ver `n8n-workflows.md` | 2026-07-24 |
+| Despliegue | Docker híbrido: n8n/Postgres/servicios livianos en Compose; render y Whisper nativos en Windows (GPU/rendimiento/disco) | 2026-07-24 |
 
 ## Pendientes
 
