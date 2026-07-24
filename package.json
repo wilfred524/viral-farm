@@ -1,0 +1,21 @@
+{
+  "name": "viral-farm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bot que edita y publica videos con potencial viral en redes sociales (movie recaps y más)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "cli": "tsx src/cli.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
+  }
+}
