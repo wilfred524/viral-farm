@@ -33,6 +33,9 @@ TikTok · Instagram Reels · YouTube Shorts · X/Twitter — vía **servicio int
 
 | Carpeta | Contenido |
 |---|---|
+| `src/` | CLI y pasos del pipeline (`src/pasos/`), utilidades (`src/lib/`) |
+| `remotion/` | Composición del clip vertical: hook, subtítulos karaoke, plantilla |
+| `scripts/` | Subprocesos Python: transcripción (faster-whisper) y TTS (Edge-TTS) |
 | `orchestrator/` | Flujos de n8n exportados (JSON) |
 | `workers/render/` | Worker de montaje: Remotion (plantillas parametrizadas) + ffmpeg |
 | `workers/ai/` | Worker IA: análisis visual, guion, captions, TTS |
@@ -42,13 +45,39 @@ TikTok · Instagram Reels · YouTube Shorts · X/Twitter — vía **servicio int
 
 ## Pipeline de contenido
 
-1. **Ingesta** — video fuente → ffmpeg extrae audio + frames de muestreo
-2. **Análisis** — Whisper local transcribe; visión LLM mapea escenas a timestamps
-3. **Guion** — LLM escribe narración viral (hook en 1.5 s, tensión, payoff) + captions/hashtags por red
-4. **Voz** — TTS de la narración
-5. **Montaje** — ffmpeg corta/comprime → Remotion monta subtítulos karaoke, zooms, plantilla de marca
-6. **QC + preview** — Telegram → aprobación con botón → publicación programada
-7. **Feedback loop** — cron recoge métricas → el LLM ajusta los siguientes guiones
+Un video largo entra y salen N clips verticales listos para aprobación:
+
+1. **Ingesta** — ffprobe valida el fuente y crea su carpeta de trabajo (`media/<video_id>/`)
+2. **Transcripción** — faster-whisper local, con timestamps por palabra
+3. **Selección de clips** — el LLM elige los fragmentos con más gancho; el código valida rangos, solapes y fronteras de frase
+4. **Guion** — por clip: hook de 1.5 s, reparto en tramos `narracion` \| `original`, caption y hashtags
+5. **Voz** — Edge-TTS sintetiza los tramos narrados y devuelve timings por palabra
+6. **Montaje** — ffmpeg recorta, reencuadra a 1080×1920 y mezcla la voz con el audio ambiental atenuado (**ducking**, sin alargar el clip) → `base.mp4`
+7. **Render** — Remotion añade subtítulos karaoke y plantilla → `final.mp4` + `preview.mp4`
+
+Después (Fases 2–3): **QC + preview** por Telegram con botón de aprobación, **publicación** vía el intermediario y **feedback loop** de métricas.
+
+## Uso (Fase 1)
+
+```bash
+npm install
+pip install faster-whisper edge-tts
+cp .env.example .env        # y completa ANTHROPIC_API_KEY
+
+npm run cli -- run <video.mp4> --n 5          # pipeline completo
+npm run cli -- run <video.mp4> --sin-tts      # solo audio original, sin narración
+npm run cli -- help                           # pasos sueltos: ingest, transcribe, clips, guion, tts, montar, render
+```
+
+Cada paso es idempotente: reejecutar `run` retoma donde se quedó sin repetir transcripciones ni llamadas al LLM. `--force` rehace el paso indicado.
+
+Artefactos por video:
+
+```
+media/<video_id>/
+  fuente.json  audio.wav  transcripcion.json  clips.json
+  clips/<n>/   guion.json  narracion/  narracion.json  base.mp4  final.mp4  preview.mp4
+```
 
 ## Estado del video (máquina de estados)
 
@@ -56,8 +85,8 @@ TikTok · Instagram Reels · YouTube Shorts · X/Twitter — vía **servicio int
 
 ## Roadmap
 
-- [ ] **Fase 0 — Fundación:** repo, estructura, elección de intermediario de publicación
-- [ ] **Fase 1 — Pipeline manual:** CLI end-to-end (fuente → transcripción → guion → TTS → montaje → mp4)
+- [x] **Fase 0 — Fundación:** repo, estructura, elección de intermediario de publicación
+- [x] **Fase 1 — Pipeline manual:** CLI end-to-end (fuente → transcripción → clips → guion → TTS → montaje → mp4 vertical)
 - [ ] **Fase 2 — Control por Telegram:** `/idea`, `/preview`, botones de aprobación, n8n self-hosted
 - [ ] **Fase 3 — Publicación multi-red:** API del intermediario, horarios pico, captions por red
 - [ ] **Fase 4 — Feedback viral:** métricas → rendimiento por hook/formato/horario → prompts alimentados con ganadores

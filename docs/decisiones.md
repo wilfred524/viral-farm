@@ -12,13 +12,18 @@
 | Base de datos | **PostgreSQL** (ya instalado; reemplaza a SQLite — locking multi-contenedor) | 2026-07-24 |
 | Orquestación | **n8n = capa de control humano** (Telegram, aprobación, cron); el pipeline lo motorizan workers TS vía tabla `jobs` en Postgres (`FOR UPDATE SKIP LOCKED`). Ver `n8n-workflows.md` | 2026-07-24 |
 | Despliegue | Docker híbrido: n8n/Postgres/servicios livianos en Compose; render y Whisper nativos en Windows (GPU/rendimiento/disco) | 2026-07-24 |
+| Formato de la Fase 1 | **Clipping**: un video largo → N clips verticales 9:16 con subtítulos, en vez del recap narrado. Fija el producto de `Propuesta_Tecnica_Pipeline_Video.pdf` | 2026-07-29 |
+| Narración | **Ducking, misma duración**: el LLM parte cada clip en tramos `narracion` \| `original`; donde hay voz, el audio ambiental baja a −18 dB. El clip nunca se alarga | 2026-07-29 |
+| Transcripción | **faster-whisper** (Python, CPU por defecto) con `word_timestamps` — sin timings por palabra no hay subtítulos karaoke | 2026-07-29 |
+| TTS | **Edge-TTS** con `boundary="WordBoundary"`; se invoca como subproceso, interfaz swapeable | 2026-07-29 |
+| Montaje y render | ffmpeg del sistema para recorte/reencuadre/mezcla (`base.mp4`) + Remotion para subtítulos y plantilla (`final.mp4`) | 2026-07-29 |
 
 ## Pendientes
 
 - [ ] **Elegir intermediario de publicación** — comparar Upload-Post vs Blotato vs Metricool: precio, redes soportadas, API de métricas, límites de subida.
 - [ ] **Presupuesto IA mensual** — decidir escenario según la matriz de abajo.
-- [ ] **TTS** — arrancar con Edge-TTS (gratis) y evaluar si la voz es cuello de botella.
-- [ ] **Espacio en disco** — el worker de render necesita workspace; C: está ~99% lleno.
+- [ ] **Espacio en disco** — el worker de render necesita workspace; C: sigue con ~4,5 GB libres. El CLI aborta el render por debajo de `MIN_GB_LIBRES` (8 por defecto).
+- [ ] **Modelo del LLM** — la Fase 1 usa `claude-opus-5` por defecto (`LLM_MODELO`); medir coste real por video y bajar a Sonnet/Haiku si la calidad del gancho lo permite.
 
 ## Matriz de costos IA (por video de ~1–3 min; mes = 60 videos, 2/día)
 

@@ -10,9 +10,18 @@ Bot que edita y publica videos/imágenes con potencial viral en redes sociales (
 Leer los tres antes de implementar cualquier fase. Mantenerlos actualizados cuando se tome una decisión nueva.
 
 ## Estado actual
-- **Fase 0 (fundación) completada**: estructura del repo, docs, git inicializado.
-- **Siguiente: Fase 1** — CLI end-to-end: video fuente → transcripción (Whisper local) → guion (LLM) → TTS → montaje (Remotion + ffmpeg) → mp4 vertical 1080×1920.
+- **Fase 0 (fundación) y Fase 1 (pipeline CLI) completadas.**
+- La Fase 1 implementa **clipping**: video largo → N clips 9:16 con subtítulos, con narración TTS opcional mezclada por **ducking** (el clip conserva su duración). Comandos: `ingest, transcribe, clips, guion, tts, montar, render, run`.
+- Pasos idempotentes sobre artefactos en `media/<video_id>/`; diseñados para que el worker de la Fase 2 solo tenga que invocarlos.
+- **Siguiente: Fase 2** — control por Telegram + n8n (ver `docs/n8n-workflows.md`).
 - Pendiente decidir: intermediario de publicación (Upload-Post vs Blotato vs Metricool) y presupuesto IA.
+
+## Notas de implementación (Fase 1)
+- `typescript` está fijado en 5.9: el bundler de Remotion usa `typescript.sys`, que TS 7 no expone.
+- `remotion/` tiene su propio `tsconfig.json` (`moduleResolution: Bundler`) porque webpack no resuelve los imports con extensión `.js` que exige NodeNext en `src/`.
+- Edge-TTS 7.x emite `SentenceBoundary` por defecto: hay que pedir `boundary="WordBoundary"` para los timings por palabra.
+- faster-whisper se invoca con `--dispositivo cpu`; con `auto` elige CUDA y falla si no están las libs de cuBLAS.
+- El bundle de Remotion usa `symlinkPublicDir: true`; sin eso copiaría todo `MEDIA_DIR` en cada render.
 
 ## Principios de diseño
 - **El bot propone, el usuario aprueba**: nunca publicar sin aprobación humana (botón en Telegram).
