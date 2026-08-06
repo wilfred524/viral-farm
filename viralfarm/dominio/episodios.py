@@ -319,6 +319,28 @@ def normalizar_episodios(
     return ResultadoSerie(episodios=episodios, cobertura=cobertura, avisos=avisos)
 
 
+#: Tope absoluto de episodios en una serie, independientemente de la duración.
+TOPE_EPISODIOS = 40
+
+
+def tope_episodios(duracion_fuente: float, cobertura_max: float = COBERTURA_MAX) -> int:
+    """Cuántos episodios se le pueden pedir al modelo como máximo.
+
+    El tope sale del **límite de cobertura**, no solo de la duración: pedir más episodios de
+    los que caben bajo `COBERTURA_MAX` garantiza que la serie se rechace después. El pipeline
+    TypeScript derivaba el tope solo de la duración (`ceil(duracion / 270)`), así que en una
+    película de 20 minutos pedía 5 episodios —el 112 % del fuente— y la validación de
+    cobertura los tumbaba sin remedio.
+
+    Devuelve al menos 2, porque una serie de un episodio no es una serie: si el material no da
+    para dos, `normalizar_episodios` lo dirá con un error claro en vez de callar aquí.
+    """
+    if duracion_fuente <= 0:
+        return 2
+    cabe = int(duracion_fuente * cobertura_max // DURACION_OBJETIVO)
+    return max(2, min(TOPE_EPISODIOS, cabe))
+
+
 def calcular_cobertura(episodios: Sequence[Episodio], duracion_fuente: float) -> float:
     """Fracción del fuente cubierta por los episodios. Control de calidad y de riesgo legal."""
     if duracion_fuente <= 0:

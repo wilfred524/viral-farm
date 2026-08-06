@@ -283,3 +283,43 @@ def test_el_score_no_es_un_numero_opaco() -> None:
     }
     # Los pesos son política, no dato del artefacto: no viajan en el JSON.
     assert "PESOS" not in volcado
+
+
+# --- tope de episodios ---------------------------------------------------------
+
+
+def test_el_tope_respeta_el_limite_de_cobertura() -> None:
+    """El fallo que encontró la primera prueba real con LLM.
+
+    El pipeline TypeScript derivaba el tope solo de la duración: en una película de 20 min
+    pedía 5 episodios, que cubrirían el 112 % del fuente, y la validación de cobertura los
+    rechazaba después. Pedir lo imposible y fallar más tarde es peor que pedir menos.
+    """
+    from viralfarm.dominio.episodios import DURACION_OBJETIVO, tope_episodios
+
+    for duracion in (1204.0, 3600.0, 5400.0, 7200.0):
+        tope = tope_episodios(duracion)
+        cobertura_pedida = tope * DURACION_OBJETIVO / duracion
+        assert cobertura_pedida <= COBERTURA_MAX, (
+            f"{duracion:.0f}s: {tope} episodios cubrirían el {cobertura_pedida * 100:.0f} %"
+        )
+
+
+def test_el_tope_nunca_baja_de_dos() -> None:
+    """Una serie de un episodio no es una serie; que falle el validador, no el tope."""
+    from viralfarm.dominio.episodios import tope_episodios
+
+    assert tope_episodios(60.0) == 2
+    assert tope_episodios(0.0) == 2
+
+
+def test_el_tope_tiene_techo_absoluto() -> None:
+    from viralfarm.dominio.episodios import TOPE_EPISODIOS, tope_episodios
+
+    assert tope_episodios(100_000.0) == TOPE_EPISODIOS
+
+
+def test_el_tope_crece_con_la_duracion() -> None:
+    from viralfarm.dominio.episodios import tope_episodios
+
+    assert tope_episodios(1204.0) < tope_episodios(3600.0) < tope_episodios(7200.0)
