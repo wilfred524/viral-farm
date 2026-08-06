@@ -24,16 +24,23 @@ export async function ejecutarPipeline(rutaVideo: string, opciones: OpcionesCli)
   const videoId = fuente.videoId;
 
   console.log("\n[2/7] Transcripción");
-  await transcribir(videoId, opciones.force);
+  await transcribir(videoId, { force: opciones.force, idioma: opciones.idioma });
 
-  console.log("\n[3/7] Selección de clips");
-  await seleccionarClips(videoId, opciones.n, opciones.force);
+  console.log(`\n[3/7] ${opciones.formato === "serie" ? "Serie de episodios" : "Selección de clips"}`);
+  await seleccionarClips(videoId, {
+    n: opciones.nExplicito ? opciones.n : undefined,
+    force: opciones.force,
+    idiomaSalida: opciones.idiomaSalida,
+    formato: opciones.formato,
+    sinEscenas: opciones.sinEscenas,
+  });
 
   console.log("\n[4/7] Guion");
   await generarGuiones(videoId, {
     force: opciones.force,
     clip: opciones.clip,
     sinTts: opciones.sinTts,
+    idiomaSalida: opciones.idiomaSalida,
   });
 
   if (opciones.sinTts) {

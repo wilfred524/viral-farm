@@ -4,7 +4,7 @@
 Contrato con el pipeline TS (ver src/lib/proceso.ts): stdout es JSON puro, todo log va a
 stderr. Los timestamps por palabra son obligatorios: sin ellos no hay subtítulos karaoke.
 
-Uso: python scripts/transcribir.py --audio audio.wav --modelo small --idioma es
+Uso: python scripts/transcribir.py --audio audio.wav --modelo small --idioma auto
 """
 
 import argparse
@@ -20,7 +20,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Transcripción con faster-whisper")
     parser.add_argument("--audio", required=True)
     parser.add_argument("--modelo", default="small")
-    parser.add_argument("--idioma", default="es")
+    # "auto" (por defecto) deja que Whisper detecte el idioma. Forzar uno equivocado no da
+    # error: traduce sobre la marcha y devuelve un texto degradado, difícil de detectar luego.
+    parser.add_argument("--idioma", default="auto")
     # Por defecto CPU: con device="auto" ctranslate2 elige CUDA en cuanto ve una GPU NVIDIA y
     # revienta con "cublas64_12.dll is not found" si no están instaladas las libs de cuBLAS.
     parser.add_argument("--dispositivo", default="cpu", help="cpu | cuda")

@@ -23,7 +23,33 @@ import type { PropsClip } from "../src/tipos";
 /** Segundos que el hook permanece en pantalla. */
 const DURACION_HOOK = 2.5;
 
-const Hook: React.FC<{ texto: string }> = ({ texto }) => {
+/**
+ * Chapa de numeración de la serie. Va aparte del hook y no concatenada a su texto: con 104 px
+ * de tipografía, meter "Parte 3 · " dentro rompería el encaje de la caja.
+ */
+const ChapaParte: React.FC<{ parte: number; totalPartes: number }> = ({ parte, totalPartes }) => (
+  <div
+    style={{
+      marginBottom: 18,
+      padding: "10px 28px",
+      borderRadius: 999,
+      background: "rgba(0,0,0,0.55)",
+      fontFamily: fuenteTitular,
+      fontSize: 46,
+      letterSpacing: 2,
+      color: "#FFE45E",
+      textShadow: "0 4px 18px rgba(0,0,0,0.7)",
+    }}
+  >
+    {parte} / {totalPartes}
+  </div>
+);
+
+const Hook: React.FC<{ texto: string; parte?: number; totalPartes?: number }> = ({
+  texto,
+  parte,
+  totalPartes,
+}) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -45,6 +71,9 @@ const Hook: React.FC<{ texto: string }> = ({ texto }) => {
         opacity: salida,
       }}
     >
+      {parte !== undefined && totalPartes !== undefined ? (
+        <ChapaParte parte={parte} totalPartes={totalPartes} />
+      ) : null}
       <div
         style={{
           transform: `scale(${0.9 + entrada * 0.1})`,
@@ -66,11 +95,17 @@ const Hook: React.FC<{ texto: string }> = ({ texto }) => {
   );
 };
 
-export const ClipVertical: React.FC<PropsClip> = ({ video, hook, subtitulos }) => {
+export const ClipVertical: React.FC<PropsClip> = ({
+  video,
+  hook,
+  subtitulos,
+  parte,
+  totalPartes,
+}) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
       <OffthreadVideo src={staticFile(video)} />
-      <Hook texto={hook} />
+      <Hook texto={hook} parte={parte} totalPartes={totalPartes} />
       <Subtitulos subtitulos={subtitulos} />
     </AbsoluteFill>
   );

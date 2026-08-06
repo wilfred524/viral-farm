@@ -54,6 +54,23 @@ export type Transcripcion = z.infer<typeof TranscripcionSchema>;
 
 // === clips.json ===
 
+/**
+ * Anatomía del arco narrativo dentro de un episodio, en segundos relativos a su inicio.
+ * Entre `desenlace` y el final del episodio va el cierre en tensión: lo que engancha con la
+ * entrega siguiente.
+ */
+export const ArcoSchema = z.object({
+  /** Pico de tensión. */
+  cumbre: z.number().nonnegative(),
+  /** Instante en que se cierra el arco que abrió el episodio. */
+  desenlace: z.number().nonnegative(),
+});
+export type Arco = z.infer<typeof ArcoSchema>;
+
+/** De qué dependió cada frontera del episodio: diagnóstico de la calidad del corte. */
+export const AlineacionSchema = z.enum(["escena", "frase", "llm"]);
+export type Alineacion = z.infer<typeof AlineacionSchema>;
+
 export const ClipSchema = z.object({
   indice: z.number().int().nonnegative(),
   inicio: z.number().nonnegative(),
@@ -61,11 +78,37 @@ export const ClipSchema = z.object({
   titulo: z.string(),
   razon: z.string(),
   puntuacion: z.number().min(0).max(10),
+
+  // --- formato serie; ausentes en artefactos del formato "virales" ---
+  /** Número de entrega, 1-based. Invariante del formato serie: `parte === indice + 1`. */
+  parte: z.number().int().positive().optional(),
+  totalPartes: z.number().int().positive().optional(),
+  arco: ArcoSchema.optional(),
+  /** Qué ocurre en el episodio; materia prima del recap de la entrega siguiente. */
+  resumen: z.string().optional(),
+  /** Tensión que queda abierta al final y que resuelve el episodio siguiente. */
+  cliffhanger: z.string().optional(),
+  /** Segundos del fuente saltados desde el fin del episodio anterior (0 = encadenados). */
+  huecoAnterior: z.number().nonnegative().optional(),
+  alineacion: z.object({ inicio: AlineacionSchema, fin: AlineacionSchema }).optional(),
 });
 export type Clip = z.infer<typeof ClipSchema>;
 
+export const SerieSchema = z.object({
+  titulo: z.string(),
+  sinopsis: z.string(),
+  totalPartes: z.number().int().positive(),
+  /** Fracción del fuente cubierta por los episodios: control de calidad y de riesgo legal. */
+  cobertura: z.number().min(0).max(1),
+});
+export type Serie = z.infer<typeof SerieSchema>;
+
 export const ClipsSchema = z.object({
   modelo: z.string(),
+  /** `virales` = comportamiento legado; ausente en artefactos anteriores al formato serie. */
+  formato: z.enum(["virales", "serie"]).default("virales"),
+  /** Solo en formato serie. */
+  serie: SerieSchema.optional(),
   clips: z.array(ClipSchema),
 });
 export type Clips = z.infer<typeof ClipsSchema>;
@@ -89,11 +132,29 @@ export type Tramo = z.infer<typeof TramoSchema>;
 
 export const GuionSchema = z.object({
   indice: z.number().int().nonnegative(),
+  /**
+   * Idioma en que están escritos hook, narración y caption (ISO 639-1). Puede no coincidir
+   * con el del audio original; el paso de TTS elige la voz a partir de él.
+   */
+  idioma: z.string().default("es"),
   /** Frase corta que se superpone al principio del clip (gancho de 1.5 s). */
   hook: z.string(),
   tramos: z.array(TramoSchema).min(1),
   caption: z.string(),
   hashtags: z.array(z.string()),
+
+  // --- formato serie ---
+  parte: z.number().int().positive().optional(),
+  totalPartes: z.number().int().positive().optional(),
+  /** Texto del recap narrado que abre el episodio. Ausente en la parte 1. */
+  recap: z.string().optional(),
+  /**
+   * Resumen de lo que se narró REALMENTE en este episodio, en el idioma de salida. Es la
+   * entrada del recap del siguiente, y se prefiere al `resumen` planificado en clips.json.
+   */
+  resumen: z.string().optional(),
+  /** Tensión abierta al final, tal como quedó narrada. */
+  cliffhanger: z.string().optional(),
 });
 export type Guion = z.infer<typeof GuionSchema>;
 
@@ -136,5 +197,8 @@ export const PropsClipSchema = z.object({
   fps: z.number().positive(),
   hook: z.string(),
   subtitulos: z.array(SubtituloSchema),
+  /** Formato serie: la composición pinta una chapa "PARTE n / N" sobre el hook. */
+  parte: z.number().int().positive().optional(),
+  totalPartes: z.number().int().positive().optional(),
 });
 export type PropsClip = z.infer<typeof PropsClipSchema>;

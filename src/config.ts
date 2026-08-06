@@ -69,17 +69,52 @@ export const config = {
 
   /** Modelo de Whisper para faster-whisper (tiny/base/small/medium/large-v3). */
   modeloWhisper: process.env.WHISPER_MODELO?.trim() || "small",
-  idiomaWhisper: process.env.WHISPER_IDIOMA?.trim() || "es",
+  /**
+   * Idioma hablado en el video. `auto` deja que Whisper lo detecte, que es lo correcto salvo
+   * que el audio sea difícil: forzar un idioma equivocado no falla, hace que Whisper traduzca
+   * mal sobre la marcha y devuelva texto inservible.
+   */
+  idiomaFuente: process.env.IDIOMA_FUENTE?.trim() || process.env.WHISPER_IDIOMA?.trim() || "auto",
+  /**
+   * Idioma de narración, hook, caption y hashtags. Vacío = el mismo que se detectó en el
+   * audio. Se fija para producir contenido en un idioma distinto al del material.
+   */
+  idiomaSalida: process.env.IDIOMA_SALIDA?.trim() || "",
   /** cpu | cuda. Con `cuda` hacen falta las libs de cuBLAS/cuDNN instaladas. */
   dispositivoWhisper: process.env.WHISPER_DISPOSITIVO?.trim() || "cpu",
 
-  /** Voz de Edge-TTS. `edge-tts --list-voices` lista las disponibles. */
-  vozTts: process.env.TTS_VOZ?.trim() || "es-MX-JorgeNeural",
+  /**
+   * Voz de Edge-TTS. Vacío = la del catálogo para el idioma de salida (src/lib/idiomas.ts).
+   * Fijarla aquí la impone en todos los idiomas, así que solo tiene sentido en pipelines
+   * de un único idioma. `edge-tts --list-voices` lista las disponibles.
+   */
+  vozTts: process.env.TTS_VOZ?.trim() || "",
 
   modeloLlm: process.env.LLM_MODELO?.trim() || "claude-sonnet-5",
+  /**
+   * Directorio de respuestas del LLM en disco. Si está definido, `pedirEstructurado()` lee de
+   * ahí en vez de llamar a la API (y cachea lo que sí llama). Permite ejercitar el pipeline
+   * completo sin clave, y con la misma validación de esquema que una respuesta real.
+   */
+  llmRespuestasDir: process.env.LLM_RESPUESTAS_DIR?.trim()
+    ? path.resolve(RAIZ, process.env.LLM_RESPUESTAS_DIR.trim())
+    : "",
+
+  /**
+   * Llamada a la acción que cierra el caption de cada episodio. Vacío = la del catálogo de
+   * idiomas, en el idioma de salida (src/lib/idiomas.ts).
+   */
+  serieCta: process.env.SERIE_CTA?.trim() || "",
+  serieCtaFinal: process.env.SERIE_CTA_FINAL?.trim() || "",
 
   /** Formato de salida vertical. */
   video: { ancho: 1080, alto: 1920, fps: 30 },
+
+  /** Calidad del render. crf 23 es indistinguible de 18 en móvil y ocupa la mitad. */
+  renderCrf: Number(process.env.RENDER_CRF ?? 23),
+  renderPreset: (process.env.RENDER_PRESET?.trim() || "faster") as "faster" | "fast" | "medium",
+  /** Hilos de Remotion. Vacío = su heurística (suele quedarse corta en máquinas de 8 núcleos). */
+  renderConcurrencia: Number(process.env.RENDER_CONCURRENCIA ?? 0) || 0,
 
   /** Atenuación del audio ambiental bajo la narración, en dB. */
   duckingDb: Number(process.env.DUCKING_DB ?? -18),

@@ -23,7 +23,7 @@ import {
 } from "../tipos.js";
 import { existe, leerJson, pasoIdempotente, rutas } from "../lib/artefactos.js";
 import { comprimirPreview } from "../lib/ffmpeg.js";
-import { verificarEspacio } from "../lib/disco.js";
+import { verificarEspacio, verificarEspacioParaSerie } from "../lib/disco.js";
 
 export interface OpcionesRender {
   force?: boolean;
@@ -123,6 +123,9 @@ async function renderizarClip(
         fps: config.video.fps,
         hook: guion.hook,
         subtitulos: await construirSubtitulos(videoId, clip, transcripcion),
+        ...(guion.parte !== undefined && guion.totalPartes !== undefined
+          ? { parte: guion.parte, totalPartes: guion.totalPartes }
+          : {}),
       };
 
       const serveUrl = await obtenerBundle();
@@ -143,6 +146,12 @@ async function renderizarClip(
         codec: "h264",
         outputLocation: salida,
         inputProps: props,
+        // El default de Remotion (crf 18, preset medium) produce archivos enormes y tarda el
+        // doble. Con episodios de varios minutos eso son GB y horas; crf 23 es indistinguible
+        // en un móvil.
+        crf: config.renderCrf,
+        x264Preset: config.renderPreset,
+        ...(config.renderConcurrencia ? { concurrency: config.renderConcurrencia } : {}),
         onProgress: ({ progress }) => {
           process.stdout.write(`\r  ${Math.round(progress * 100)}%`);
         },
@@ -168,6 +177,19 @@ export async function renderizarClips(
     opciones.clip === undefined ? clips : clips.filter((c) => c.indice === opciones.clip);
   if (seleccionados.length === 0) {
     throw new Error(`No existe el clip ${opciones.clip} en ${rutas.clips(videoId)}`);
+  }
+
+  // Un lote de episodios largos son horas de render: se comprueba el disco para el total, no
+  // pieza a pieza, para no abortar a mitad de una serie.
+  const pendientes: Clip[] = [];
+  for (const clip of seleccionados) {
+    if (opciones.force || !(await existe(rutas.final(videoId, clip.indice)))) pendientes.push(clip);
+  }
+  if (pendientes.length > 0) {
+    await verificarEspacioParaSerie(
+      config.mediaDir,
+      pendientes.reduce((s, c) => s + (c.fin - c.inicio), 0),
+    );
   }
 
   const salidas: string[] = [];

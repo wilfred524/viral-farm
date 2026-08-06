@@ -32,7 +32,16 @@ Opciones:
   --clip <indice>     Limita el paso a un solo clip
   --sin-tts           No genera narración: los clips conservan solo su audio original
   --reencuadre <m>    center (recorte central, por defecto) | blur-pad (fondo desenfocado)
+  --idioma <cod>      Idioma hablado en el video (es, en, pt…). auto = detectar (por defecto)
+  --idioma-salida <c> Idioma de narración, hook y caption. Por defecto, el del audio
+  --formato <f>       serie (episodios encadenados, por defecto) | virales (fragmentos sueltos)
+  --sin-escenas       No alinea los cortes a cambio de plano (solo frontera de frase)
   --force             Rehace el paso aunque su artefacto ya exista
+
+Ejemplos:
+  run pelicula.mp4                                  Serie de episodios en el idioma del audio
+  run pelicula.mp4 --idioma-salida es               Película en inglés, serie narrada en español
+  run charla.mp4 --formato virales --n 5            Clips sueltos de 20-60 s (formato legado)
 `;
 
 type Manejador = (opciones: OpcionesCli) => Promise<void>;
@@ -48,12 +57,22 @@ const comandos: Record<string, Manejador> = {
 
   async transcribe(opciones) {
     const { transcribir } = await import("./pasos/transcribir.js");
-    await transcribir(requiereVideoId(opciones), opciones.force);
+    await transcribir(requiereVideoId(opciones), {
+      force: opciones.force,
+      idioma: opciones.idioma,
+    });
   },
 
   async clips(opciones) {
     const { seleccionarClips } = await import("./pasos/clips.js");
-    await seleccionarClips(requiereVideoId(opciones), opciones.n, opciones.force);
+    await seleccionarClips(requiereVideoId(opciones), {
+      // Sin --n explícito, el formato serie deriva el tope de la duración del fuente.
+      n: opciones.nExplicito ? opciones.n : undefined,
+      force: opciones.force,
+      idiomaSalida: opciones.idiomaSalida,
+      formato: opciones.formato,
+      sinEscenas: opciones.sinEscenas,
+    });
   },
 
   async guion(opciones) {
@@ -62,6 +81,7 @@ const comandos: Record<string, Manejador> = {
       force: opciones.force,
       clip: opciones.clip,
       sinTts: opciones.sinTts,
+      idiomaSalida: opciones.idiomaSalida,
     });
   },
 
@@ -93,6 +113,25 @@ const comandos: Record<string, Manejador> = {
       force: opciones.force,
       clip: opciones.clip,
     });
+  },
+
+  /** Diagnóstico: qué cambios de plano hay alrededor de un instante del fuente. */
+  async cortes(opciones) {
+    if (opciones.en === undefined) throw new Error("Uso: cortes --video-id <id> --en <segundo>");
+    const { leerJson, rutas } = await import("./lib/artefactos.js");
+    const { FuenteSchema } = await import("./tipos.js");
+    const { cortesCercanos } = await import("./lib/escenas.js");
+
+    const fuente = await leerJson(rutas.fuente(requiereVideoId(opciones)), FuenteSchema);
+    const encontrados = await cortesCercanos(fuente.rutaOriginal, opciones.en);
+    if (encontrados.length === 0) {
+      console.log(`Sin cambios de plano a menos de 3 s de ${opciones.en}.`);
+      return;
+    }
+    for (const corte of encontrados) {
+      const delta = corte - opciones.en;
+      console.log(`  ${corte.toFixed(3)} s (${delta >= 0 ? "+" : ""}${delta.toFixed(3)})`);
+    }
   },
 
   async run(opciones) {

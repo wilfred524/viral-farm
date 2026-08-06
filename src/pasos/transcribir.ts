@@ -12,8 +12,19 @@ import { ejecutarJson } from "../lib/proceso.js";
 import { escribirJson, existe, leerJson, pasoIdempotente, rutas } from "../lib/artefactos.js";
 import { FuenteSchema } from "../tipos.js";
 
-export async function transcribir(videoId: string, force = false): Promise<Transcripcion> {
+export interface OpcionesTranscribir {
+  force?: boolean;
+  /** ISO 639-1 del audio, o `auto` para que lo detecte Whisper. Por defecto, la config. */
+  idioma?: string;
+}
+
+export async function transcribir(
+  videoId: string,
+  opciones: OpcionesTranscribir = {},
+): Promise<Transcripcion> {
   const fuente = await leerJson(rutas.fuente(videoId), FuenteSchema);
+  const force = opciones.force ?? false;
+  const idioma = opciones.idioma?.trim() || config.idiomaFuente;
 
   return pasoIdempotente({
     salida: rutas.transcripcion(videoId),
@@ -27,14 +38,16 @@ export async function transcribir(videoId: string, force = false): Promise<Trans
         await extraerAudio(fuente.rutaOriginal, audio);
       }
 
-      console.log(`· transcripción: faster-whisper (${config.modeloWhisper})…`);
+      console.log(
+        `· transcripción: faster-whisper (${config.modeloWhisper}, idioma ${idioma})…`,
+      );
       const bruto = await ejecutarJson<unknown>(
         config.python,
         [
           path.join(config.scriptsDir, "transcribir.py"),
           "--audio", audio,
           "--modelo", config.modeloWhisper,
-          "--idioma", config.idiomaWhisper,
+          "--idioma", idioma,
           "--dispositivo", config.dispositivoWhisper,
         ],
         {

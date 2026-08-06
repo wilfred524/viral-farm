@@ -1,5 +1,15 @@
 # Dependencias
 node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Cachés de herramientas Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Builds y salidas de render
 dist/
@@ -24,6 +34,7 @@ out/
 
 # Material fuente y temporales
 media/
+workspace/
 tmp/
 .cache/
 

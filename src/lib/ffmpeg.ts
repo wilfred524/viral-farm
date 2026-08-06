@@ -218,6 +218,11 @@ export async function construirBase(opciones: OpcionesBase): Promise<void> {
     "-preset", "medium",
     "-crf", "20",
     "-pix_fmt", "yuv420p",
+    // Un keyframe por segundo: `OffthreadVideo` extrae cada frame por seek, y con GOP largo
+    // cada seek obliga a decodificar desde el keyframe anterior. Sube algo el tamaño de
+    // base.mp4 (que es intermedio) a cambio de acelerar el render, que es lo caro.
+    "-g", String(fps),
+    "-keyint_min", String(fps),
     "-r", String(fps),
     "-s", `${ancho}x${alto}`,
     "-c:a", "aac",

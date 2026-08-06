@@ -13,6 +13,7 @@ import { ClipsSchema } from "../tipos.js";
 import { ejecutarJson } from "../lib/proceso.js";
 import { duracionMedio } from "../lib/ffmpeg.js";
 import { asegurarDir, escribirJson, leerJson, pasoIdempotente, rutas } from "../lib/artefactos.js";
+import { esIdiomaConocido, resolverIdioma } from "../lib/idiomas.js";
 import type { Palabra } from "../tipos.js";
 
 const TEMPO_MAX = 1.15;
@@ -28,8 +29,24 @@ export interface OpcionesTts {
   clip?: number;
 }
 
+/**
+ * La voz sale del idioma del guion, no de la config: un mismo pipeline puede producir clips
+ * en varios idiomas. `TTS_VOZ` sigue mandando si está definida, para forzar una voz concreta.
+ */
+function vozParaGuion(idiomaGuion: string): string {
+  if (config.vozTts) return config.vozTts;
+  if (!esIdiomaConocido(idiomaGuion)) {
+    console.warn(
+      `  · idioma "${idiomaGuion}" sin voz afinada: se usa la voz multilingüe. ` +
+        `Fija TTS_VOZ si quieres otra.`,
+    );
+  }
+  return resolverIdioma(idiomaGuion).voz;
+}
+
 async function sintetizarClip(videoId: string, indice: number, force: boolean): Promise<Narracion> {
   const guion = await leerJson(rutas.guion(videoId, indice), GuionSchema);
+  const voz = vozParaGuion(guion.idioma);
 
   return pasoIdempotente({
     salida: rutas.narracion(videoId, indice),
@@ -50,7 +67,7 @@ async function sintetizarClip(videoId: string, indice: number, force: boolean): 
           [
             path.join(config.scriptsDir, "tts.py"),
             "--texto", tramo.texto,
-            "--voz", config.vozTts,
+            "--voz", voz,
             "--salida", archivo,
           ],
           { etiqueta: "edge-tts" },
@@ -87,10 +104,12 @@ async function sintetizarClip(videoId: string, indice: number, force: boolean): 
       }
 
       const narracion = await escribirJson(rutas.narracion(videoId, indice), NarracionSchema, {
-        voz: config.vozTts,
+        voz,
         tramos,
       });
-      console.log(`· tts #${indice}: ${tramos.length} tramos narrados (${config.vozTts})`);
+      console.log(
+        `· tts #${indice}: ${tramos.length} tramos narrados (${voz}, ${guion.idioma})`,
+      );
       return narracion;
     },
   });
