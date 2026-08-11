@@ -108,6 +108,9 @@ Escribes para este episodio:
 
 Reglas de los tramos (episodio de {d.duracion:.0f} segundos):
 - Cubren de {d.desde:.0f} a {d.duracion:.1f}, en orden, sin huecos ni solapes.
+- Las fronteras de tramo caen en instantes REALES de la lista de arriba: donde entra o sale
+  una línea de diálogo, donde empieza o acaba un silencio. No repartas la duración en
+  números redondos —0, 15, 30, 45—: eso delata que no estás mirando el material.
 - Entre 10 y 20 tramos. Un episodio de varios minutos con 3 tramos es un muro: alterna.
 - Un tramo "narracion" dura entre 4 y {TRAMO_NARRACION_MAX:.0f} segundos. Más voz en off
   seguida tapa la película y el espectador se va.
@@ -115,7 +118,12 @@ Reglas de los tramos (episodio de {d.duracion:.0f} segundos):
 - La narración total ocupa entre el {NARRACION_MIN * 100:.0f} % y el \
 {NARRACION_MAX * 100:.0f} % del episodio: aportas contexto, pero la película tiene que
   respirar.
-- El texto narrado cabe en su tramo a ritmo natural (~{d.palabras_por_segundo} palabras/segundo).
+- El texto narrado OCUPA su tramo, no solo cabe. A ~{d.palabras_por_segundo} palabras por
+  segundo, un tramo de N segundos necesita del orden de N × {d.palabras_por_segundo}
+  palabras: 12 palabras en un tramo de 16 segundos dejan doce segundos de silencio con la
+  película muda debajo. Si no tienes tanto que decir, pide un tramo más corto y devuelve el
+  resto a "original" — el silencio en un tramo `original` es la película; en uno `narracion`
+  es un agujero.
 - Los tramos "original" llevan texto vacío.
 - El ÚLTIMO tramo es "narracion" de 4 a 8 segundos: {ultimo_tramo}{arco}"""
 
@@ -139,7 +147,9 @@ def construir_prompt(
     return f"""Episodio {d.parte} de {d.total_partes} — "{titulo}" ({d.duracion:.1f} segundos).
 Por qué se eligió: {razon}
 {contexto_previo}
-Transcripción de la pieza en {idioma_origen} (tiempos relativos a su inicio):
+Lo que ocurre en la pieza, en {idioma_origen} y con tiempos relativos a su inicio. Las líneas
+«sin diálogo» son tramos donde no habla nadie: ahí la película está muda y tú decides si la
+voz en off entra o si el material respira solo.
 {transcripcion_episodio or "(sin habla)"}
 
 {aviso_traduccion}Escribe el guion en {d.idioma_salida}. Los tramos deben cubrir de \

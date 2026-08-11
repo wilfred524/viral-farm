@@ -132,3 +132,51 @@ def test_el_prompt_distingue_los_tipos_de_evento() -> None:
     assert "«sin diálogo" in texto
     assert "▸ se abre la puerta" in texto
     assert "linea 0" in texto
+
+
+# --- recorte a episodio: lo que el guionista debe ver -------------------------
+
+
+def test_el_recorte_revela_un_silencio_que_la_pelicula_entera_escondia() -> None:
+    """El caso del episodio 1 real: un hueco de 58 s que el guionista nunca vio.
+
+    En la película entera ese hueco puede quedar por debajo del umbral o diluido entre
+    otros; dentro de un episodio de 340 s es un sexto del metraje.
+    """
+    from viralfarm.dominio.timeline import recortar_a_episodio
+
+    completa = construir_timeline(transcripcion_con((100, 105), (163, 168), (170, 175)), 400)
+    trozo = recortar_a_episodio(completa, 100, 200)
+
+    silencios = [e for e in trozo.eventos if e.tipo is TipoEvento.SILENCIO]
+    assert len(silencios) >= 1
+    grande = max(silencios, key=lambda e: e.duracion)
+    assert grande.duracion == pytest.approx(58.0)
+    assert "58 s" in grande.texto
+
+
+def test_el_recorte_devuelve_tiempos_relativos_al_episodio() -> None:
+    from viralfarm.dominio.timeline import recortar_a_episodio
+
+    completa = construir_timeline(transcripcion_con((100, 105), (110, 115)), 400)
+    trozo = recortar_a_episodio(completa, 100, 200)
+    assert trozo.duracion == 100
+    assert trozo.eventos[0].inicio == pytest.approx(0.0)
+
+
+def test_el_recorte_marca_la_cola_muda_del_final() -> None:
+    """El episodio 1 real terminaba con 19 s sin una palabra."""
+    from viralfarm.dominio.timeline import recortar_a_episodio
+
+    completa = construir_timeline(transcripcion_con((0, 5), (10, 20)), 100)
+    trozo = recortar_a_episodio(completa, 0, 60)
+    assert trozo.eventos[-1].tipo is TipoEvento.SILENCIO
+    assert trozo.eventos[-1].fin == pytest.approx(60.0)
+
+
+def test_el_recorte_deja_fuera_lo_que_no_pertenece_al_episodio() -> None:
+    from viralfarm.dominio.timeline import recortar_a_episodio
+
+    completa = construir_timeline(transcripcion_con((10, 15), (300, 305)), 400)
+    trozo = recortar_a_episodio(completa, 0, 100)
+    assert all("linea 300" not in e.texto for e in trozo.eventos)

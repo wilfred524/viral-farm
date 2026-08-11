@@ -21,6 +21,71 @@ from viralfarm.dominio.episodios import SILENCIO_NOTABLE
 #: Duración que se atribuye a una observación visual puntual, en segundos.
 DURACION_OBSERVACION = 2.0
 
+#: Hueco sin habla que se marca al escribir el guion de UN episodio.
+#:
+#: Mucho más fino que `SILENCIO_NOTABLE` (15 s), que es el umbral para elegir cortes en una
+#: película entera. Dentro de un episodio de seis minutos, 15 s es demasiado grueso: en la
+#: primera serie real el guionista no vio un hueco de 58 s porque nadie se lo dijo, y lo
+#: cubrió con un tramo de 4,1 s de voz.
+SILENCIO_EN_EPISODIO = 6.0
+
+
+def recortar_a_episodio(
+    timeline: Timeline, inicio: float, fin: float, silencio_notable: float = SILENCIO_EN_EPISODIO
+) -> Timeline:
+    """Porción de la línea de tiempo dentro de `[inicio, fin]`, con tiempos relativos.
+
+    Los silencios se recalculan sobre el recorte: un hueco que en la película entera no
+    llegaba al umbral puede ser enorme dentro de un episodio, y es justo el que el guionista
+    necesita ver para decidir si narra ahí o deja respirar.
+    """
+    dentro = [
+        EventoTimeline(
+            tipo=e.tipo,
+            inicio=max(0.0, e.inicio - inicio),
+            fin=min(fin, e.fin) - inicio,
+            texto=e.texto,
+            intensidad=e.intensidad,
+        )
+        for e in timeline.eventos
+        if e.tipo is not TipoEvento.SILENCIO and e.fin > inicio and e.inicio < fin
+    ]
+
+    duracion = fin - inicio
+    con_silencios: list[EventoTimeline] = []
+    anterior = 0.0
+    for evento in sorted(dentro, key=lambda e: e.inicio):
+        hueco = evento.inicio - anterior
+        if hueco >= silencio_notable:
+            con_silencios.append(
+                EventoTimeline(
+                    tipo=TipoEvento.SILENCIO,
+                    inicio=anterior,
+                    fin=evento.inicio,
+                    texto=f"sin diálogo · {hueco:.0f} s",
+                )
+            )
+        con_silencios.append(evento)
+        anterior = max(anterior, evento.fin)
+
+    cola = duracion - anterior
+    if cola >= silencio_notable:
+        con_silencios.append(
+            EventoTimeline(
+                tipo=TipoEvento.SILENCIO,
+                inicio=anterior,
+                fin=duracion,
+                texto=f"sin diálogo · {cola:.0f} s",
+            )
+        )
+
+    return Timeline(
+        duracion=duracion,
+        idioma=timeline.idioma,
+        con_vision=timeline.con_vision,
+        eventos=con_silencios,
+    )
+
 
 def construir_timeline(
     transcripcion: Transcripcion,

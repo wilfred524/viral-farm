@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from viralfarm.contratos.guion import TipoTramo, Tramo
+from viralfarm.contratos.voz import Voz
 from viralfarm.dominio.idiomas import Idioma
 
 #: Margen libre al final de un tramo narrado para que la voz no pise el siguiente.
@@ -28,6 +29,14 @@ NARRACION_MIN = 0.4
 NARRACION_MAX = 0.65
 #: Por debajo de esto un tramo es residual y se absorbe en el anterior.
 TRAMO_MINIMO = 0.5
+
+#: Fracción del tramo narrado que la voz debe ocupar para que el tramo no suene vacío.
+#:
+#: La densidad se medía sobre el tramo ASIGNADO, no sobre el audio que suena, así que el
+#: sistema no sabía lo vacío que estaba su propio resultado: en la primera serie real
+#: declaró 38 % y 27 % de narración cuando la voz real ocupaba el 13,3 % y el 19,0 %. Un
+#: tramo de 16,4 s llegó a contener 4,1 s de voz — doce segundos de nada.
+OCUPACION_MINIMA_VOZ = 0.7
 
 _NUMERACION_PREVIA = re.compile(
     r"^(parte|part|partie|teil)\s*\d+\s*(?:/\s*\d+)?\s*[—\-:·]?\s*", re.I
@@ -134,18 +143,88 @@ def max_palabras_recap(palabras_por_segundo: float) -> int:
     return int((RECAP_SEG - MARGEN) * palabras_por_segundo)
 
 
-def evaluar_densidad(tramos: Sequence[Tramo], duracion: float) -> list[str]:
+def segundos_de_voz(voz: Voz | None) -> float:
+    """Segundos de audio narrado que realmente suenan. `None` = todavía no se sintetizó."""
+    return sum(t.duracion for t in voz.tramos) if voz else 0.0
+
+
+def densidad_real(tramos: Sequence[Tramo], duracion: float, voz: Voz | None) -> float:
+    """Fracción del episodio con voz en off **sonando**, en [0, 1].
+
+    Con `voz`, mide el audio sintetizado. Sin ella, cae a la duración de los tramos
+    asignados, que es una cota superior: sirve para validar el guion antes del TTS, pero no
+    debe confundirse con lo que el espectador oirá.
+    """
+    if duracion <= 0:
+        return 0.0
+    if voz is not None:
+        return segundos_de_voz(voz) / duracion
+    return sum(t.duracion for t in tramos if t.tipo is TipoTramo.NARRACION) / duracion
+
+
+def detectar_aire_muerto(
+    tramos: Sequence[Tramo], voz: Voz, ocupacion_minima: float = OCUPACION_MINIMA_VOZ
+) -> list[str]:
+    """Tramos narrados cuya voz no llena el hueco que se les asignó.
+
+    Es diagnóstico, no corrección: qué hacer con un hueco —alargar el texto, acortar el
+    tramo o dejar respirar el material— es una decisión narrativa, no mecánica.
+    """
+    avisos: list[str] = []
+    for posicion, tramo in enumerate(tramos):
+        if tramo.tipo is not TipoTramo.NARRACION or tramo.duracion <= 0:
+            continue
+        pista = voz.por_tramo(posicion)
+        if pista is None:
+            avisos.append(
+                f"tramo {posicion} ({tramo.inicio:.1f}–{tramo.fin:.1f}s): narrado pero sin "
+                "audio sintetizado; sonará mudo."
+            )
+            continue
+        ocupacion = pista.duracion / tramo.duracion
+        if ocupacion < ocupacion_minima:
+            avisos.append(
+                f"tramo {posicion} ({tramo.inicio:.1f}–{tramo.fin:.1f}s): "
+                f"{pista.duracion:.1f}s de voz en {tramo.duracion:.1f}s de tramo "
+                f"({ocupacion * 100:.0f}%): {tramo.duracion - pista.duracion:.1f}s de silencio "
+                "dentro de un tramo que se cuenta como narrado."
+            )
+    return avisos
+
+
+def evaluar_densidad(
+    tramos: Sequence[Tramo], duracion: float, voz: Voz | None = None
+) -> list[str]:
     """Avisos sobre cuánta voz en off lleva el episodio.
 
     Poca narración debilita el argumento de transformatividad (ver `riesgos.md`); demasiada
     tapa el material y el espectador se va.
+
+    Con `voz` mide el audio real y añade el desglose de aire muerto. Sin ella mide los
+    tramos asignados y **lo dice**, para que un 38 % optimista no se confunda con la
+    realidad.
     """
     avisos: list[str] = []
     if duracion <= 0:
         return avisos
 
     narrados = [t for t in tramos if t.tipo is TipoTramo.NARRACION]
-    densidad = sum(t.duracion for t in narrados) / duracion
+    densidad = densidad_real(tramos, duracion, voz)
+
+    if voz is not None:
+        asignada = sum(t.duracion for t in narrados) / duracion
+        if asignada - densidad > 0.05:
+            avisos.append(
+                f"narración real {densidad * 100:.0f} % frente al {asignada * 100:.0f} % "
+                f"asignado: {sum(t.duracion for t in narrados) - segundos_de_voz(voz):.0f}s "
+                "de los tramos narrados están en silencio."
+            )
+        avisos.extend(detectar_aire_muerto(tramos, voz))
+    elif narrados:
+        avisos.append(
+            "densidad medida sobre los tramos asignados, no sobre el audio: el valor real "
+            "solo se conoce tras sintetizar la voz."
+        )
 
     if densidad < NARRACION_MIN:
         avisos.append(

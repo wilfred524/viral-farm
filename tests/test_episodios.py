@@ -197,7 +197,10 @@ def test_arco_fuera_de_rango_se_recoloca(segmentos: list[Segmento]) -> None:
     arco = resultado.episodios[0].arco
     assert arco is not None
     assert 0 < arco.cumbre < arco.desenlace < resultado.episodios[0].duracion
-    assert any("arco fuera de rango" in aviso for aviso in resultado.avisos)
+    assert any("cae fuera del episodio" in aviso for aviso in resultado.avisos)
+    # El episodio queda marcado: ese arco es geometría, no una lectura del material.
+    assert resultado.episodios[0].arco_estimado is True
+    assert resultado.episodios[1].arco_estimado is False
 
 
 def test_hueco_anterior_se_calcula_desde_el_episodio_previo(segmentos: list[Segmento]) -> None:
@@ -323,3 +326,64 @@ def test_el_tope_crece_con_la_duracion() -> None:
     from viralfarm.dominio.episodios import tope_episodios
 
     assert tope_episodios(1204.0) < tope_episodios(3600.0) < tope_episodios(7200.0)
+
+
+# --- regresión del primer diagnóstico real -----------------------------------
+
+
+def test_el_arco_estimado_reproduce_las_proporciones_del_episodio_real(
+    segmentos: list[Segmento],
+) -> None:
+    """El episodio 2 de la primera serie real: arco 0,62 / 0,85 de la duración.
+
+    Sus valores propuestos (cumbre 1072, desenlace 1109) caían fuera del episodio tras el
+    truncado, así que el código los sustituyó. El desenlace resultante cayó dentro de 92 s
+    sin una sola palabra: por eso el flag importa.
+    """
+    from viralfarm.dominio.episodios import ARCO_CUMBRE_ESTIMADA, ARCO_DESENLACE_ESTIMADO
+
+    resultado = normalizar_episodios(
+        [propuesto(0, 270), propuesto(344, 701, cumbre=1072, desenlace=1109)],
+        segmentos,
+        1204.0,
+    )
+    ep = resultado.episodios[1]
+    assert ep.arco_estimado is True
+    assert ep.arco is not None
+    assert ep.arco.cumbre == pytest.approx(ep.duracion * ARCO_CUMBRE_ESTIMADA)
+    assert ep.arco.desenlace == pytest.approx(ep.duracion * ARCO_DESENLACE_ESTIMADO)
+
+
+def test_truncar_un_episodio_invalida_sus_metadatos(segmentos: list[Segmento]) -> None:
+    """El caso exacto del episodio 2: pedido 345–1203, entregado 345–701.
+
+    Su `resumen` hablaba de escenas que se cayeron y el caption anunciaba un final que no
+    ocurre. Sobrevive el 42 % del rango: los textos no pueden heredarse.
+    """
+    resultado = normalizar_episodios(
+        [propuesto(0, 340), propuesto(345, 1203, resumen="Zeus y el plan del furgón")],
+        segmentos,
+        1204.0,
+    )
+    truncado = resultado.episodios[1]
+    assert truncado.duracion <= DURACION_MAX
+    assert truncado.metadatos_obsoletos is True
+    assert any("se quedó fuera" in aviso for aviso in resultado.avisos)
+
+
+def test_un_ajuste_pequeno_no_invalida_los_metadatos(segmentos: list[Segmento]) -> None:
+    """Mover el corte a la frontera de frase más cercana no cambia de qué va el episodio."""
+    resultado = normalizar_episodios(
+        [propuesto(0, 271), propuesto(300, 570)], segmentos, 3600.0
+    )
+    assert all(not e.metadatos_obsoletos for e in resultado.episodios)
+
+
+def test_la_fusion_invalida_los_metadatos(segmentos: list[Segmento]) -> None:
+    """Dos resúmenes concatenados no son el resumen del episodio fusionado."""
+    resultado = normalizar_episodios(
+        [propuesto(0, 200), propuesto(200, 240), propuesto(245, 515)],
+        segmentos,
+        3600.0,
+    )
+    assert resultado.episodios[0].metadatos_obsoletos is True

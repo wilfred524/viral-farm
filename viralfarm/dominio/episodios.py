@@ -45,6 +45,15 @@ VIRAL_MAX = 60.0
 #: Tolerancia al buscar frontera de frase, en segundos.
 TOLERANCIA_FRONTERA = 2.0
 
+#: Fracción del rango propuesto que debe sobrevivir a la reparación para que el `resumen` y
+#: el `cliffhanger` del modelo sigan describiendo el episodio. Por debajo, los textos hablan
+#: de material que se quedó fuera y hay que regenerarlos.
+#:
+#: No es un número redondo por gusto: en la primera serie real el episodio 2 se pidió como
+#: 345–1203 s y quedó en 345–701, o sea el 42 % de lo propuesto. Su resumen siguió
+#: describiendo escenas ausentes y el caption anunciaba un final que nunca ocurre.
+FRACCION_METADATOS_VALIDOS = 0.9
+
 
 class SerieInvalida(ValueError):
     """La serie no cumple una invariante dura. Se prefiere fallar antes que renderizar horas."""
@@ -64,6 +73,9 @@ class EpisodioPropuesto:
     cliffhanger: str = ""
     puntuacion: float = 0.0
     alineacion: AlineacionFronteras = field(default_factory=AlineacionFronteras)
+    #: Lo marca la reparación cuando mueve las fronteras: `resumen` y `cliffhanger` fueron
+    #: escritos para otro rango y ya no describen lo que hay dentro.
+    metadatos_obsoletos: bool = False
 
 
 @dataclass
@@ -203,6 +215,8 @@ def _reparar_duraciones(
                 previo.alineacion = AlineacionFronteras(
                     inicio=previo.alineacion.inicio, fin=episodio.alineacion.fin
                 )
+                # Dos resúmenes concatenados no son el resumen del episodio fusionado.
+                previo.metadatos_obsoletos = True
                 continue
             avisos.append(
                 f'episodio "{episodio.titulo}" descartado: {fin - inicio:.0f} s, no llega al '
@@ -210,27 +224,57 @@ def _reparar_duraciones(
             )
             continue
 
-        reparados.append(replace(episodio, inicio=inicio, fin=fin))
+        # Si la reparación se comió una parte apreciable del rango, `resumen` y
+        # `cliffhanger` describen material que ya no está dentro.
+        propuesto = episodio.fin - episodio.inicio
+        superviviente = (fin - inicio) / propuesto if propuesto > 0 else 1.0
+        obsoletos = superviviente < FRACCION_METADATOS_VALIDOS
+        if obsoletos:
+            avisos.append(
+                f'episodio "{episodio.titulo}": la reparación conserva el '
+                f"{superviviente * 100:.0f} % del rango propuesto, así que su resumen y su "
+                "cierre describen material que se quedó fuera. Hay que regenerarlos."
+            )
+
+        reparados.append(
+            replace(episodio, inicio=inicio, fin=fin, metadatos_obsoletos=obsoletos)
+        )
 
     return reparados
 
 
+#: Proporciones de reserva cuando el arco propuesto no cabe en el episodio. Son geometría,
+#: no lectura del material: por eso el episodio queda marcado con `arco_estimado`.
+ARCO_CUMBRE_ESTIMADA = 0.62
+ARCO_DESENLACE_ESTIMADO = 0.85
+
+
 def _arco_relativo(
     propuesto: EpisodioPropuesto, duracion: float, parte: int, avisos: list[str]
-) -> Arco:
-    """Arco a tiempos relativos, recolocado si el modelo lo situó fuera del episodio."""
+) -> tuple[Arco, bool]:
+    """Arco a tiempos relativos. Devuelve `(arco, estimado)`.
+
+    `estimado=True` significa que el modelo lo situó fuera del episodio y el código lo
+    sustituyó por una proporción fija. Esa distinción no es cosmética: el arco viaja al
+    prompt del guion como «aquí está el pico de tensión», y afirmarlo sobre un número
+    inventado hace que el guionista proteja un momento que puede caer en mitad de un
+    silencio — ocurrió en la primera serie real.
+    """
     cumbre = propuesto.cumbre - propuesto.inicio
     desenlace = propuesto.desenlace - propuesto.inicio
     tope_desenlace = duracion - COLA_MINIMA
 
-    if not (0 < cumbre < desenlace <= tope_desenlace):
-        cumbre = duracion * 0.62
-        desenlace = duracion * 0.85
-        avisos.append(
-            f"episodio {parte}: arco fuera de rango, recolocado en "
-            f"cumbre {cumbre:.0f} s / desenlace {desenlace:.0f} s."
-        )
-    return Arco(cumbre=cumbre, desenlace=desenlace)
+    if 0 < cumbre < desenlace <= tope_desenlace:
+        return Arco(cumbre=cumbre, desenlace=desenlace), False
+
+    cumbre = duracion * ARCO_CUMBRE_ESTIMADA
+    desenlace = duracion * ARCO_DESENLACE_ESTIMADO
+    avisos.append(
+        f"episodio {parte}: el arco propuesto cae fuera del episodio; se estima en "
+        f"cumbre {cumbre:.0f} s / desenlace {desenlace:.0f} s. Es geometría, no una "
+        "lectura del material: el guion no debe tratarlo como un pico real."
+    )
+    return Arco(cumbre=cumbre, desenlace=desenlace), True
 
 
 def _validar_invariantes(
@@ -283,6 +327,9 @@ def normalizar_episodios(
     episodios: list[Episodio] = []
     for posicion, propuesto in enumerate(reparados):
         anterior = reparados[posicion - 1] if posicion > 0 else None
+        arco, arco_estimado = _arco_relativo(
+            propuesto, propuesto.fin - propuesto.inicio, posicion + 1, avisos
+        )
         episodios.append(
             Episodio(
                 indice=posicion,
@@ -292,9 +339,9 @@ def normalizar_episodios(
                 razon=propuesto.razon,
                 parte=posicion + 1,
                 total_partes=len(reparados),
-                arco=_arco_relativo(
-                    propuesto, propuesto.fin - propuesto.inicio, posicion + 1, avisos
-                ),
+                arco=arco,
+                arco_estimado=arco_estimado,
+                metadatos_obsoletos=propuesto.metadatos_obsoletos,
                 resumen=propuesto.resumen,
                 cliffhanger=propuesto.cliffhanger,
                 hueco_anterior=max(0.0, propuesto.inicio - anterior.fin) if anterior else 0.0,

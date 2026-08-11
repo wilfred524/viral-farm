@@ -7,6 +7,7 @@ from itertools import pairwise
 import pytest
 
 from viralfarm.contratos.guion import TipoTramo
+from viralfarm.contratos.voz import Voz, VozTramo
 from viralfarm.dominio.idiomas import resolver_idioma
 from viralfarm.dominio.tramos import (
     NARRACION_MAX,
@@ -16,6 +17,8 @@ from viralfarm.dominio.tramos import (
     TramoPropuesto,
     componer_caption,
     contar_palabras,
+    densidad_real,
+    detectar_aire_muerto,
     evaluar_densidad,
     insertar_recap,
     max_palabras_recap,
@@ -214,3 +217,81 @@ def test_caption_en_ingles_no_mezcla_idiomas() -> None:
     assert caption.startswith("Part 2/8")
     assert "Follow" in caption
     assert "Sígueme" not in caption
+
+
+# --- aire muerto: regresión del primer diagnóstico real ----------------------
+
+
+def _voz_con(duraciones: dict[int, float]) -> Voz:
+    """Voz sintetizada donde el tramo N dura `duraciones[N]` segundos."""
+    return Voz(
+        voz="es-MX-JorgeNeural",
+        tramos=[
+            VozTramo(tramo=n, archivo=f"voz/{n}.mp3", desplazamiento=0.0, duracion=d)
+            for n, d in duraciones.items()
+        ],
+    )
+
+
+def test_la_densidad_asignada_miente_cuando_hay_aire_muerto() -> None:
+    """El fallo que el diagnóstico destapó: el sistema no sabía lo vacío que estaba.
+
+    Números del episodio 1 real: 127,9 s de tramos narrados con 45,0 s de voz. Declaraba
+    38 % de narración; lo que sonaba era el 13,3 %. Se reproduce con ocho tramos narrados
+    de 16 s —el reparto que hizo el modelo— y 5,6 s de voz en cada uno.
+    """
+    propuestos = []
+    for i in range(8):
+        propuestos.append(narracion(i * 42.5, i * 42.5 + 16, "hola " * 14))
+        propuestos.append(original(i * 42.5 + 16, (i + 1) * 42.5))
+    tramos = normalizar_tramos(propuestos, 0, 340, PPS).tramos
+    narrados = [n for n, t in enumerate(tramos) if t.tipo is TipoTramo.NARRACION]
+    voz = _voz_con(dict.fromkeys(narrados, 5.6))
+
+    asignada = densidad_real(tramos, 340, voz=None)
+    real = densidad_real(tramos, 340, voz)
+    assert asignada > 0.35, "la medida antigua veía un tercio del episodio narrado"
+    assert real < 0.15, "lo que de verdad suena es la mitad de eso"
+    assert real < asignada / 2
+
+
+def test_detecta_el_tramo_con_doce_segundos_de_nada() -> None:
+    """Caso literal del episodio 1: 4,1 s de voz en un tramo de 16,4 s."""
+    tramos = normalizar_tramos([narracion(0, 16.4, "hola " * 12)], 0, 16.4, PPS).tramos
+    avisos = detectar_aire_muerto(tramos, _voz_con({0: 4.1}))
+    assert len(avisos) == 1
+    assert "12.3s de silencio" in avisos[0]
+
+
+def test_un_tramo_bien_lleno_no_avisa() -> None:
+    tramos = normalizar_tramos([narracion(0, 10, "hola " * 20)], 0, 10, PPS).tramos
+    assert detectar_aire_muerto(tramos, _voz_con({0: 9.0})) == []
+
+
+def test_un_tramo_narrado_sin_audio_se_delata() -> None:
+    tramos = normalizar_tramos([narracion(0, 10, "hola " * 20)], 0, 10, PPS).tramos
+    avisos = detectar_aire_muerto(tramos, _voz_con({}))
+    assert any("sonará mudo" in a for a in avisos)
+
+
+def test_sin_voz_la_densidad_se_declara_provisional() -> None:
+    """Antes de sintetizar solo hay una cota superior, y el aviso debe decirlo."""
+    propuestos = [narracion(0, 50, "hola " * 20), original(50, 100)]
+    tramos = normalizar_tramos(propuestos, 0, 100, PPS).tramos
+    avisos = evaluar_densidad(tramos, 100)
+    assert any("no sobre el audio" in a for a in avisos)
+
+
+def test_con_voz_el_aviso_cuantifica_el_silencio() -> None:
+    tramos = normalizar_tramos(
+        [
+            narracion(0, 18, "hola " * 15),
+            original(18, 60),
+            narracion(60, 78, "hola " * 15),
+            original(78, 340),
+        ],
+        0, 340, PPS,
+    ).tramos
+    narrados = [n for n, t in enumerate(tramos) if t.tipo is TipoTramo.NARRACION]
+    avisos = evaluar_densidad(tramos, 340, _voz_con(dict.fromkeys(narrados, 6.0)))
+    assert any("de los tramos narrados están en silencio" in a for a in avisos)

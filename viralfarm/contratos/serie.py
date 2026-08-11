@@ -117,6 +117,23 @@ class Episodio(Base):
     alineacion: AlineacionFronteras = Field(default_factory=AlineacionFronteras)
     score: ScoreEpisodio = Field(default_factory=ScoreEpisodio)
 
+    #: True si el arco no lo leyó el modelo del material, sino que lo puso el código como
+    #: proporción fija al detectar que el propuesto caía fuera del episodio.
+    #:
+    #: Importa porque el arco viaja al prompt del guion como «aquí está el pico de tensión»:
+    #: afirmarlo cuando es `duracion * 0.62` es pedirle al guionista que respete un momento
+    #: que puede caer en mitad de un silencio. Medido en la primera serie real: el desenlace
+    #: estimado del episodio 2 cayó dentro de 92 s sin una sola palabra.
+    arco_estimado: bool = False
+
+    #: True si el código movió las fronteras después de que el modelo escribiera `resumen` y
+    #: `cliffhanger`, de modo que esos textos describen material que ya no está dentro.
+    #:
+    #: En la primera serie real el episodio 2 se pidió como 345–1203 s y quedó truncado en
+    #: 701; su resumen siguió hablando de escenas que se cayeron, y el caption anunciaba un
+    #: final que no ocurre. Quien genere el guion debe regenerarlos en vez de heredarlos.
+    metadatos_obsoletos: bool = False
+
     @property
     def duracion(self) -> float:
         return self.fin - self.inicio
