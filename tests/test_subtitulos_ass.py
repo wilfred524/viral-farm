@@ -272,3 +272,22 @@ def test_varios_tramos_se_combinan_con_max() -> None:
 def test_rampa_no_positiva_es_error() -> None:
     with pytest.raises(ValueError, match="rampa"):
         expresion_ducking([(0.0, 1.0)], 0.5, rampa=0)
+
+
+def test_el_hook_largo_se_ajusta_en_varias_lineas() -> None:
+    """Regresión del primer render real: el hook se salía del encuadre.
+
+    `WrapStyle: 2` desactiva el ajuste automático. Vale para los subtítulos, cuyo corte
+    decide `agrupar_en_lineas`, pero el hook es una frase libre que el modelo escribe sin
+    límite: sin ajuste, una frase larga se sale por los dos lados de un 1080 de ancho.
+    """
+    ass = generar_ass("A returned check exposes a dark family secret.", [])
+    assert "WrapStyle: 0" in ass, "el hook necesita ajuste automático de línea"
+    assert "WrapStyle: 2" not in ass
+
+
+def test_los_margenes_dejan_ancho_util_al_hook() -> None:
+    """Con el ajuste activo, el ancho útil lo fijan los márgenes laterales."""
+    estilo = EstiloAss()
+    ancho_util = 1080 - 2 * estilo.margen_lateral
+    assert ancho_util >= 900, "menos de 900 px deja el hook demasiado estrecho"

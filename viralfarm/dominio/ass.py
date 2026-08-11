@@ -90,12 +90,17 @@ def _cabecera(ancho: int, alto: int, estilo: EstiloAss) -> str:
     negro = "&H00000000&"
     # WrapStyle 2: sin ajuste automático de línea; el corte lo decide `agrupar_en_lineas`.
     # Alignment 2 = abajo centrado, 8 = arriba centrado.
+    # WrapStyle 0 = ajuste automático equilibrado, repartiendo el texto entre líneas de
+    # ancho parecido. Estuvo en 2 (sin ajuste) porque el corte de los subtítulos lo decide
+    # `agrupar_en_lineas`, pero eso solo vale para los subtítulos: el HOOK es una frase
+    # libre que el modelo escribe sin límite de longitud, y sin ajuste se salía del
+    # encuadre por los dos lados — comprobado en el primer render real.
     return f"""[Script Info]
 ; Generado por ViralFarm — no editar a mano
 ScriptType: v4.00+
 PlayResX: {ancho}
 PlayResY: {alto}
-WrapStyle: 2
+WrapStyle: 0
 ScaledBorderAndShadow: yes
 YCbCr Matrix: TV.709
 

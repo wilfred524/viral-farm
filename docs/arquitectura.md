@@ -382,9 +382,20 @@ Remotion hacía tres cosas sobre un `base.mp4` que ffmpeg ya dejaba montado: hoo
 (`\fscx`/`\fscy`), posición, fade y transiciones temporizadas (`\t`). Se genera desde Python
 como texto plano y se quema con `ffmpeg -vf subtitles=`.
 
-Beneficios: desaparece Node del repo; el render deja de ser frame a frame en un navegador
-(**estimación por validar: de ~18 min por episodio a 1-3 min**); y se puede fusionar con el
-montaje en un solo pase.
+Beneficios: desaparece Node del repo y el render deja de ser frame a frame en un navegador.
+
+**Medido el 2026-08-06** sobre los dos episodios de `pelicula-prueba` (697 s de vídeo, mismos
+`base.mp4` de entrada):
+
+| | Remotion | ASS/libass |
+|---|---|---|
+| Tiempo total | **51,3 min** | **6,0 min** (8,6× más rápido) |
+| Por episodio | 28,9 y 21,6 min | 2,9 y 3,1 min |
+| Velocidad | 0,2× tiempo real | **2,0× tiempo real** |
+| Tamaño de salida | 242 MB | 158 MB (−35 %) |
+
+La estimación previa (1-3 min por episodio) resultó correcta. El resultado visual es
+equivalente: hook, chapa `n / N` y karaoke con color distinto según el origen de la palabra.
 
 Coste asumido: se pierde Remotion Studio (preview interactiva) y la sinergia de código con el
 proyecto hermano `my-video`, que queda como referencia conceptual. Si en el futuro se quieren
@@ -420,8 +431,9 @@ TS, no contra criterio. Los tests se saltan solos si `media/` no está (no se ve
 
 ## 10. Roadmap
 
-> **Estado al 2026-08-06:** fases 0 y 1 implementadas en `viralfarm/` (contratos y dominio
-> puro, 93 tests). El pipeline TypeScript sigue siendo el operativo hasta la fase 3.
+> **Estado al 2026-08-06:** fases 0 y 1 implementadas (contratos y dominio puro), más el
+> adaptador de LLM y el de subtitulado ASS adelantados de las fases 2 y 4. El pipeline
+> TypeScript sigue siendo el operativo hasta la fase 3.
 
 | Fase | Contenido | Criterio de aceptación |
 |---|---|---|
@@ -429,7 +441,7 @@ TS, no contra criterio. Los tests se saltan solos si `media/` no está (no se ve
 | **1** ✅ | `dominio/`: episodios, tramos, subtítulos, ASS, ducking, idiomas, timeline | Hecho el 2026-08-05: 93 tests, mypy strict y ruff en verde |
 | **2** | `adaptadores/` (ffmpeg, whisper, tts, llm con caché por videoId) | Transcripción y voz equivalentes al TS |
 | **3** | `pasos/` + CLI Typer — paridad funcional con la Fase 1 | `run` end-to-end produce la misma serie |
-| **4** | Subtitulado ASS, Remotion fuera | Un episodio se ve equivalente y tarda 1-3 min (estimado, sin validar) |
+| **4** ✅ | Subtitulado ASS, Remotion fuera | Validado el 2026-08-06: 8,6× más rápido que Remotion, salida equivalente (ver §9.2) |
 | **5** | Borrar `src/`, `remotion/`, `package.json`, `node_modules` | El repo es 100 % Python |
 | **6** | Capa 1: percepción (trazas de audio y video) | `senales.json` marca los picos reales del material |
 | **7** | Capas 2 y 5: visión dirigida y `timeline.json` | El guion menciona acciones ausentes del diálogo |

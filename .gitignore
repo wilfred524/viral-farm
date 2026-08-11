@@ -43,3 +43,6 @@ tmp/
 Thumbs.db
 .vscode/
 .idea/
+
+# Tipografías del subtitulado: sí se versionan (el render debe ser reproducible)
+!assets/fonts/
