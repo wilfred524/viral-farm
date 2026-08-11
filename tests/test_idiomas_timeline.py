@@ -180,3 +180,56 @@ def test_el_recorte_deja_fuera_lo_que_no_pertenece_al_episodio() -> None:
     completa = construir_timeline(transcripcion_con((10, 15), (300, 305)), 400)
     trozo = recortar_a_episodio(completa, 0, 100)
     assert all("linea 300" not in e.texto for e in trozo.eventos)
+
+
+# --- plantillas de prompt ----------------------------------------------------
+
+
+def test_las_plantillas_cargan_y_tienen_version() -> None:
+    """Los prompts viven en markdown; el hash permite atribuir una mejora a un cambio."""
+    from viralfarm.prompts import guion, serie
+
+    for v in (serie.version_sistema(), serie.version_usuario(),
+              guion.version_sistema(), guion.version_usuario()):
+        assert len(v) == 8 and v.isalnum()
+
+
+def test_un_marcador_sin_valor_falla_al_cargar_no_a_mitad_de_una_serie() -> None:
+    from viralfarm.prompts import plantillas
+
+    with pytest.raises(plantillas.PlantillaInvalida, match="marcadores que nadie rellena"):
+        plantillas.render("serie.usuario", duracion="1204")
+
+
+def test_pasar_un_valor_que_la_plantilla_no_usa_tambien_falla() -> None:
+    """Suele significar que alguien renombró un marcador en el markdown y olvidó un sitio."""
+    from viralfarm.prompts import plantillas
+
+    with pytest.raises(plantillas.PlantillaInvalida, match="no usa"):
+        plantillas.render("serie.sistema", inventado="x")
+
+
+def test_los_limites_numericos_salen_del_dominio_no_del_markdown() -> None:
+    """El prompt no puede prometer un tope distinto del que el código va a exigir."""
+    from viralfarm.dominio.episodios import DURACION_MAX, DURACION_MIN
+    from viralfarm.prompts.serie import construir_prompt
+
+    p = construir_prompt("[0.0] hola", 1204.0, 2, "inglés", "inglés")
+    assert f"entre {DURACION_MIN:.0f} y {DURACION_MAX:.0f} segundos" in p
+
+
+def test_el_arco_estimado_no_se_presenta_como_un_pico_real() -> None:
+    """Regresión del episodio 2: su desenlace estimado caía en 92 s de silencio."""
+    from viralfarm.prompts.guion import DatosGuion, sistema
+
+    base = dict(
+        idioma_salida="inglés", palabras_por_segundo=2.9, parte=2, total_partes=2,
+        titulo_serie="X", duracion=357.5, desde=8.0, max_original=35,
+        max_palabras_recap=22, cumbre=221.0, desenlace=303.0,
+    )
+    real = sistema(DatosGuion(**base, arco_estimado=False))
+    estimado = sistema(DatosGuion(**base, arco_estimado=True))
+
+    assert "Alrededor del segundo 221" in real
+    assert "Alrededor del segundo 221" not in estimado
+    assert "No hay una lectura fiable" in estimado

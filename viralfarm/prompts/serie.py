@@ -19,36 +19,18 @@ from viralfarm.dominio.episodios import (
     DURACION_MIN,
     DURACION_OBJETIVO,
 )
+from viralfarm.prompts import plantillas
 
-SISTEMA = """Eres guionista de series verticales. Conviertes una película larga en una SERIE
-de episodios que se publican en orden, uno por entrega, en TikTok.
 
-El producto NO son "los mejores momentos": es una serie. Reglas del formato:
+#: El texto vive en `plantillas/serie.sistema.md`. Se lee al usarlo, no al importar, para
+#: que editar el markdown no obligue a reiniciar nada.
+def sistema() -> str:
+    """Instrucciones de cómo dividir la película en episodios."""
+    return plantillas.render("serie.sistema")
 
-1. ORDEN CRONOLÓGICO ESTRICTO. El episodio 2 empieza después de donde terminó el 1. Nunca
-   vuelves atrás, nunca reordenas, nunca repites material.
-2. CADA EPISODIO ES UN RANGO CONTIGUO [inicio, fin] del material. Jamás saltas DENTRO de un
-   episodio.
-3. COBERTURA HÍBRIDA. ENTRE un episodio y el siguiente sí puede haber hueco: te saltas el
-   material de relleno. Donde la acción es continua, encadenas sin hueco (el fin de uno es
-   exactamente el inicio del siguiente). Decides según el material: ni fuerzas la cobertura
-   total ni fabricas saltos artificiales. Nunca te saltas algo que haga incomprensible el
-   episodio siguiente.
-4. ARCO POR EPISODIO. Cada episodio tiene planteamiento, CUMBRE (máxima tensión) y DESENLACE
-   que cierra lo que abrió. Puede contener varios sub-arcos, pero el espectador termina el
-   episodio satisfecho, no estafado.
-5. CIERRE EN TENSIÓN. Después del desenlace, en los últimos segundos, plantas una tensión NUEVA
-   que NO resuelves: una aparición, una decisión pendiente, una revelación a medias. Esa
-   tensión es lo primero que resuelve el episodio siguiente. Este es el motor de la serie.
-6. CONTINUIDAD. El resumen de un episodio es la materia prima del recap del siguiente.
-   Escríbelo pensando en alguien que no vio la entrega anterior.
 
-Cortas siempre en frontera de frase de la transcripción, nunca a mitad de diálogo, y a ser
-posible en un cambio de escena.
-
-Evitas: créditos, logos de productora, y tramos largos sin acción ni diálogo (marcados como
-«sin diálogo» en la transcripción) salvo que sean escena en sí: una persecución, un silencio
-cargado, un montaje musical."""
+def version_sistema() -> str:
+    return plantillas.version("serie.sistema")
 
 
 class EpisodioPropuestoLlm(BaseModel):
@@ -82,26 +64,27 @@ def construir_prompt(
     idioma_origen: str,
     idioma_salida: str,
 ) -> str:
-    """Prompt de usuario. `transcripcion_formateada` viene de `dominio.timeline`."""
-    minutos = duracion_fuente / 60
-    return f"""Película de {duracion_fuente:.0f} segundos ({minutos:.0f} minutos), hablada en \
-{idioma_origen}. Transcripción con timestamps absolutos del fuente; las líneas «sin diálogo»
-marcan tramos sin habla:
+    """Prompt de usuario. `transcripcion_formateada` viene de `dominio.timeline`.
 
-{transcripcion_formateada}
+    Los límites numéricos se interpolan desde el dominio, no se escriben en el markdown: así
+    el prompt no puede prometerle al modelo un tope distinto del que el código le va a
+    exigir después, que es como se llega a que el guion se recorte solo.
+    """
+    return plantillas.render(
+        "serie.usuario",
+        duracion=f"{duracion_fuente:.0f}",
+        minutos=f"{duracion_fuente / 60:.0f}",
+        idioma_origen=idioma_origen,
+        timeline=transcripcion_formateada,
+        max_episodios=max_episodios,
+        idioma_salida=idioma_salida,
+        duracion_min=f"{DURACION_MIN:.0f}",
+        duracion_max=f"{DURACION_MAX:.0f}",
+        duracion_objetivo=f"{DURACION_OBJETIVO:.0f}",
+        cobertura_max=f"{COBERTURA_MAX * 100:.0f}",
+        cola_minima=f"{COLA_MINIMA:.0f}",
+    )
 
-Divide la película en una serie de episodios.
 
-- Cada episodio dura entre {DURACION_MIN:.0f} y {DURACION_MAX:.0f} segundos \
-(objetivo {DURACION_OBJETIVO:.0f}).
-- Como máximo {max_episodios} episodios. Devuelve los que el material dé de sí: menos
-  episodios buenos siempre es mejor que estirar la serie con relleno.
-- Los episodios NO pueden cubrir más del {COBERTURA_MAX * 100:.0f} % de la película: deja
-  fuera el material que no aporta.
-- Orden cronológico estricto, sin solapes.
-- Para cada episodio: inicio < cumbre < desenlace < fin, con al menos {COLA_MINIMA:.0f} \
-segundos entre `desenlace` y `fin` — ahí va el cierre en tensión.
-- `titulo` sin numerar: el número de parte lo añade el sistema.
-- `cliffhanger` del ÚLTIMO episodio: no dejes nada abierto, es el cierre de la historia.
-
-Escribe titulo, razon, resumen, cliffhanger, tituloSerie y sinopsis en {idioma_salida}."""
+def version_usuario() -> str:
+    return plantillas.version("serie.usuario")

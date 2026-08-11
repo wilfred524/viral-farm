@@ -15,7 +15,7 @@ from enum import StrEnum
 
 from pydantic import Field, model_validator
 
-from viralfarm.contratos.comunes import Base
+from viralfarm.contratos.comunes import Base, Procedencia
 
 
 class Formato(StrEnum):
@@ -176,6 +176,9 @@ class Serie(Base):
     #: Fracción del fuente cubierta por los episodios: control de calidad y de riesgo legal.
     cobertura: float = Field(default=0.0, ge=0, le=1)
     episodios: list[Episodio] = Field(default_factory=list)
+
+    #: Versión de prompt que decidió estos cortes. Ver `contratos.comunes.Procedencia`.
+    procedencia: Procedencia | None = None
 
     @property
     def total_partes(self) -> int:

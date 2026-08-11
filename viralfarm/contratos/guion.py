@@ -12,7 +12,7 @@ from enum import StrEnum
 
 from pydantic import Field, model_validator
 
-from viralfarm.contratos.comunes import Base
+from viralfarm.contratos.comunes import Base, Procedencia
 
 
 class TipoTramo(StrEnum):
@@ -63,6 +63,10 @@ class Guion(Base):
     resumen: str = ""
     #: Tensión abierta al final, tal como quedó narrada.
     cliffhanger: str = ""
+
+    #: Qué modelo y qué versión de prompt escribieron esto. Ausente en artefactos anteriores
+    #: al versionado; el banco de pruebas la exige para poder comparar dos ejecuciones.
+    procedencia: Procedencia | None = None
 
     @property
     def duracion(self) -> float:

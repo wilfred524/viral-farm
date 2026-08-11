@@ -15,6 +15,25 @@ class Base(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class Procedencia(Base):
+    """Qué produjo un artefacto generado por un modelo.
+
+    Existe por una razón concreta: refinar prompts es un proceso iterativo, y sin saber qué
+    versión de texto generó cada salida no se puede atribuir una mejora a un cambio. Las
+    versiones son el hash del contenido de la plantilla (`prompts.plantillas.version`), así
+    que dos guiones con la misma pareja de hashes son comparables entre sí.
+    """
+
+    modelo: str = ""
+    prompt_sistema: str = ""
+    prompt_usuario: str = ""
+
+    @property
+    def etiqueta(self) -> str:
+        """Identificador corto de la combinación, para nombrar carpetas y filas de tabla."""
+        return f"{self.prompt_sistema or '?'}+{self.prompt_usuario or '?'}"
+
+
 class Palabra(Base):
     """Una palabra con su ventana temporal, en segundos relativos al medio que la contiene."""
 
