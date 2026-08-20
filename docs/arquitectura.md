@@ -206,7 +206,8 @@ LLM tiene que inferir intensidad leyendo diálogo.
 película de 90 minutos son 540 imágenes y un coste absurdo. Frames **donde la capa 1 indica
 evento** — pico de audio, corte de plano tras silencio largo, cambio de energía — son ~60
 imágenes bien elegidas. Mismo dinero, mucha más señal. Es la primera decisión inteligente real
-del sistema. Técnica ya validada en el proyecto hermano `my-video`.
+del sistema. La técnica —extraer frames con `-ss <t> -frames:v 1` y pasarlos por un modelo de
+visión para mapear acciones a timestamps— está validada en pruebas previas (ver `CLAUDE.md`).
 
 Salida: **línea de tiempo multimodal** que fusiona diálogo, acciones y silencios en una
 secuencia ordenada. Es el nuevo contrato de entrada de la capa 3.
@@ -397,8 +398,7 @@ Beneficios: desaparece Node del repo y el render deja de ser frame a frame en un
 La estimación previa (1-3 min por episodio) resultó correcta. El resultado visual es
 equivalente: hook, chapa `n / N` y karaoke con color distinto según el origen de la palabra.
 
-Coste asumido: se pierde Remotion Studio (preview interactiva) y la sinergia de código con el
-proyecto hermano `my-video`, que queda como referencia conceptual. Si en el futuro se quieren
+Coste asumido: se pierde Remotion Studio (preview interactiva). Si en el futuro se quieren
 motion graphics ricos —b-roll animado, transiciones, gráficos sobre el video— ASS se queda
 corto y habría que reintroducir un motor de composición. **El paso de subtitulado queda detrás
 de una interfaz para que ese cambio no toque el resto del pipeline.**

@@ -67,14 +67,14 @@ para no confiar de más en los resultados actuales:
 - Un solo lenguaje en todo el sistema (hoy TypeScript; **se migra a Python**, ver `docs/arquitectura.md`).
 - Persistencia: **PostgreSQL** desde 2026-07-24 (sustituyó a SQLite por locking multi-contenedor).
 
-## Aprendizajes técnicos heredados del proyecto `my-video` (C:\Users\GAF\workspace\my-video)
-Proyecto hermano donde se validó el stack de video; consultarlo como referencia de código Remotion funcionando.
+## Aprendizajes técnicos del stack de video
+Validados en un proyecto de pruebas de Remotion que ya no existe (borrado el 2026-08-13); lo
+que quedaba vivo de él está aquí.
 
-- **ffmpeg**: el bundled de Remotion (`@remotion/compositor-win32-*/ffmpeg.exe`) es un build MÍNIMO (solo scale/trim/crop/transpose/rotate). Usar el ffmpeg completo 8.1.2 del sistema: `C:\Users\GAF\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_*\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe` (tiene unsharp, eq, hqdn3d, drawtext, tile, etc.).
+- **ffmpeg**: usar el build completo 8.1.2 del sistema: `C:\Users\GAF\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_*\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe` (tiene unsharp, eq, hqdn3d, drawtext, tile, subtitles, loudnorm). Nunca un build mínimo: los que traen los empaquetadores suelen llevar solo scale/trim/crop/transpose/rotate.
 - **Video vertical**: los MOV de móvil suelen venir con `rotation=90` en metadata; ffmpeg autorrota. Extraer con `scale=1080:1920` y componer en vertical, nunca forzar 16:9 (deforma).
-- **Análisis de escenas**: extraer frames espaciados con `-ss <t> -frames:v 1` y analizarlos con visión LLM para mapear acciones a timestamps — validado, funciona bien.
-- **Remotion**: `CameraMotionBlur`/`Trail` NO deben envolver `OffthreadVideo` (refetch sub-frame falla); `random()` siempre sembrado; `loadFont()` a nivel de módulo con weights/subsets limitados; `visualizeAudio` requiere null-guard y numberOfSamples potencia de 2; TransitionSeries: duración total = Σescenas − Σtransiciones.
-- **Render local**: ~4–7 min por 1200 frames 1080×1920; los renders fallan con errores confusos ("Failed to fetch", 500) cuando el **disco está lleno** — C: anda ~99% ocupado, verificar espacio antes de renderizar.
+- **Análisis de escenas**: extraer frames espaciados con `-ss <t> -frames:v 1` y analizarlos con visión LLM para mapear acciones a timestamps — validado, funciona bien. Es la técnica de la capa 2 (`docs/arquitectura.md` §6.1).
+- **Espacio en disco**: los renders fallan con errores confusos ("Failed to fetch", 500) cuando el **disco está lleno** — C: anda ~99% ocupado, verificar espacio antes de renderizar.
 
 ## Convenciones
 - Commits en español, mensaje descriptivo de fase/módulo.

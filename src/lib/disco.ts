@@ -1,8 +1,8 @@
 /**
  * Comprobación de espacio libre antes de operaciones que escriben mucho.
  *
- * Aprendizaje heredado del proyecto `my-video`: cuando el disco se llena, los renders de
- * Remotion fallan con errores que no mencionan el disco ("Failed to fetch", 500). Abortar
+ * Cuando el disco se llena, los renders de Remotion fallan con errores que no mencionan el
+ * disco ("Failed to fetch", 500) — comprobado al montar el stack de vídeo. Abortar
  * antes con un mensaje claro ahorra mucho tiempo de diagnóstico.
  */
 

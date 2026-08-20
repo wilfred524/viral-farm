@@ -1,6 +1,6 @@
 /**
  * Carga de fuentes a nivel de módulo, limitando pesos y subsets para no disparar peticiones
- * de red durante el render (aprendizaje del proyecto `my-video`).
+ * de red durante el render.
  */
 
 import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
